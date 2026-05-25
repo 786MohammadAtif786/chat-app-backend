@@ -6,7 +6,8 @@ import {
   getMe,
   getAllUsers,
   getSingleUser,
-  saveFcmToken
+  saveFcmToken,
+  logoutUser
 } from "../controllers/auth.controller";
 
 import { protect } from "../middleware/auth.middleware";
@@ -29,10 +30,7 @@ router.post(
   saveFcmToken
 );
 
-// POST /api/auth/fcm-token
-// router.post("/fcm-token", protect, async (req, res) => {
-//   await User.findByIdAndUpdate(req.user.id, { fcmToken: req.body.fcmToken });
-//   res.json({ success: true });
-// });
+router.post("/logout", protect, logoutUser);
+
 
 export default router;
