@@ -388,7 +388,7 @@ export const getMessages = async (
     })
       .populate("sender", "name email")
       .populate("receiver", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: 1 });
 
     res.status(200).json({ success: true, messages });
   } catch (error) {
