@@ -2,10 +2,10 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "chat bot app",
-  "main": "app.js",
+  "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "npm install && npm run build",
+    "build": "npm install && tsc",
     "start": "node dist/server.js"
   },
   "author": "atif",
