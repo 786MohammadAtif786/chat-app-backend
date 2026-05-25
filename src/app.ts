@@ -6,7 +6,31 @@ import socketSetup from "./socket/socket";
 
 const app = express();
 
-app.use(cors());
+// app.use(cors());
+
+
+app.use(cors({
+  origin: function (origin, callback) {
+
+    const allowedOrigins = [
+      "http://localhost:3000",
+      "https://chat-app-backend-1-m5c7.onrender.com"
+    ];
+
+    if (!origin) return callback(null, true);
+
+    const cleanOrigin = origin.replace(/\/$/, "");
+
+    if (allowedOrigins.includes(cleanOrigin)) {
+      callback(null, true);
+    } else {
+      console.log("❌ Blocked origin:", origin);
+      callback(null, false);
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
