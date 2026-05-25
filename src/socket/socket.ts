@@ -771,10 +771,167 @@
 
 
 
+// import { Server, Socket } from "socket.io";
+// import admin from "../config/firebase";
+// import Message from "../models/message.model";
+// import User from "../models/user.model";
+
+// const onlineUsers = new Map<string, string>(); // userId -> socketId
+
+// const socketSetup = (io: Server) => {
+//   io.on("connection", (socket: Socket) => {
+//     console.log("User Connected:", socket.id);
+
+//     // JOIN
+//     socket.on("join", async (userId: string) => {
+//       onlineUsers.set(userId, socket.id);
+
+//       await User.findByIdAndUpdate(userId, { isOnline: true });
+
+//       io.emit("online-users", Array.from(onlineUsers.keys()));
+//       console.log("ONLINE USERS:", onlineUsers);
+//     });
+
+//     // SEND MESSAGE
+//     socket.on("send-message", async (data) => {
+//       try {
+//         const { sender, receiver, text } = data;
+//         if (!sender || !receiver || !text) return;
+
+//         // ✅ FIX 1: Self-message block karo
+//         if (sender === receiver) {
+//           console.log("[Socket] Self-message blocked");
+//           return;
+//         }
+
+//         const newMessage = await Message.create({
+//           sender,
+//           receiver,
+//           text,
+//           seen: false
+//         });
+
+//         const message = await Message.findById(newMessage._id)
+//           .populate("sender", "name email")
+//           .populate("receiver", "name email");
+
+//         // ✅ FIX 2: Sirf sender ko apna message wapas bhejo (receiver ko nahi)
+//         socket.emit("receive-message", message);
+
+//         const receiverSocketId = onlineUsers.get(receiver);
+
+//         if (receiverSocketId) {
+//           // ✅ Receiver online hai — socket se bhejo
+//           io.to(receiverSocketId).emit("receive-message", message);
+
+//           // ✅ FIX 3: Online ho BUT alag tab mein ho —
+//           // FCM bhi bhejo taaki notification aaye
+//           const receiverUser = await User.findById(receiver).select("fcmToken name");
+//           const senderUser = await User.findById(sender).select("name");
+
+//           if (receiverUser?.fcmToken) {
+//             try {
+//               await admin.messaging().send({
+//                 token: receiverUser.fcmToken,
+//                 notification: {
+//                   title: senderUser?.name ?? "New Message",
+//                   body: text,
+//                 },
+//                 data: {
+//                   senderId: sender.toString(),
+//                 },
+//                 webpush: {
+//                   notification: {
+//                     icon: "/chat.png",
+//                     tag: sender.toString(),
+//                   },
+//                   fcmOptions: {
+//                     link: "/chat",
+//                   },
+//                 },
+//               });
+//               console.log("[FCM] Push sent (online, different tab):", receiverUser.name);
+//             } catch (fcmErr) {
+//               console.error("[FCM] Send error:", fcmErr);
+//             }
+//           }
+//         } else {
+//           // ✅ Receiver offline hai — FCM push
+//           const receiverUser = await User.findById(receiver).select("fcmToken name");
+//           const senderUser = await User.findById(sender).select("name");
+
+//           if (receiverUser?.fcmToken) {
+//             try {
+//               await admin.messaging().send({
+//                 token: receiverUser.fcmToken,
+//                 notification: {
+//                   title: senderUser?.name ?? "New Message",
+//                   body: text,
+//                 },
+//                 data: {
+//                   senderId: sender.toString(),
+//                 },
+//                 webpush: {
+//                   notification: {
+//                     icon: "/chat.png",
+//                     tag: sender.toString(),
+//                   },
+//                   fcmOptions: {
+//                     link: "/chat",
+//                   },
+//                 },
+//               });
+//               console.log("[FCM] Push sent (offline):", receiverUser.name);
+//             } catch (fcmErr) {
+//               console.error("[FCM] Send error:", fcmErr);
+//             }
+//           }
+//         }
+//       } catch (error) {
+//         console.log("SOCKET ERROR:", error);
+//       }
+//     });
+
+//     // MESSAGE SEEN
+//     socket.on("message-seen", async ({ senderId, receiverId }) => {
+//       await Message.updateMany(
+//         { sender: senderId, receiver: receiverId, seen: false },
+//         { seen: true }
+//       );
+
+//       const senderSocketId = onlineUsers.get(senderId);
+//       if (senderSocketId) {
+//         io.to(senderSocketId).emit("messages-seen", { senderId });
+//       }
+//     });
+
+//     // DISCONNECT
+//     socket.on("disconnect", async () => {
+//       console.log("User Disconnected:", socket.id);
+
+//       for (const [key, value] of onlineUsers.entries()) {
+//         if (value === socket.id) {
+//           onlineUsers.delete(key);
+//           await User.findByIdAndUpdate(key, {
+//             isOnline: false,
+//             lastSeen: new Date()
+//           });
+//         }
+//       }
+
+//       io.emit("online-users", Array.from(onlineUsers.keys()));
+//     });
+//   });
+// };
+
+// export default socketSetup;
+
+
+
 import { Server, Socket } from "socket.io";
-import admin from "../config/firebase";
 import Message from "../models/message.model";
 import User from "../models/user.model";
+import admin from "../config/firebase";
 
 const onlineUsers = new Map<string, string>(); // userId -> socketId
 
@@ -782,114 +939,14 @@ const socketSetup = (io: Server) => {
   io.on("connection", (socket: Socket) => {
     console.log("User Connected:", socket.id);
 
-    // JOIN
+    // JOIN — user apne userId room mein enter kare
     socket.on("join", async (userId: string) => {
+      socket.join(`user_${userId}`);
       onlineUsers.set(userId, socket.id);
 
       await User.findByIdAndUpdate(userId, { isOnline: true });
-
       io.emit("online-users", Array.from(onlineUsers.keys()));
       console.log("ONLINE USERS:", onlineUsers);
-    });
-
-    // SEND MESSAGE
-    socket.on("send-message", async (data) => {
-      try {
-        const { sender, receiver, text } = data;
-        if (!sender || !receiver || !text) return;
-
-        // ✅ FIX 1: Self-message block karo
-        if (sender === receiver) {
-          console.log("[Socket] Self-message blocked");
-          return;
-        }
-
-        const newMessage = await Message.create({
-          sender,
-          receiver,
-          text,
-          seen: false
-        });
-
-        const message = await Message.findById(newMessage._id)
-          .populate("sender", "name email")
-          .populate("receiver", "name email");
-
-        // ✅ FIX 2: Sirf sender ko apna message wapas bhejo (receiver ko nahi)
-        socket.emit("receive-message", message);
-
-        const receiverSocketId = onlineUsers.get(receiver);
-
-        if (receiverSocketId) {
-          // ✅ Receiver online hai — socket se bhejo
-          io.to(receiverSocketId).emit("receive-message", message);
-
-          // ✅ FIX 3: Online ho BUT alag tab mein ho —
-          // FCM bhi bhejo taaki notification aaye
-          const receiverUser = await User.findById(receiver).select("fcmToken name");
-          const senderUser = await User.findById(sender).select("name");
-
-          if (receiverUser?.fcmToken) {
-            try {
-              await admin.messaging().send({
-                token: receiverUser.fcmToken,
-                notification: {
-                  title: senderUser?.name ?? "New Message",
-                  body: text,
-                },
-                data: {
-                  senderId: sender.toString(),
-                },
-                webpush: {
-                  notification: {
-                    icon: "/chat.png",
-                    tag: sender.toString(),
-                  },
-                  fcmOptions: {
-                    link: "/chat",
-                  },
-                },
-              });
-              console.log("[FCM] Push sent (online, different tab):", receiverUser.name);
-            } catch (fcmErr) {
-              console.error("[FCM] Send error:", fcmErr);
-            }
-          }
-        } else {
-          // ✅ Receiver offline hai — FCM push
-          const receiverUser = await User.findById(receiver).select("fcmToken name");
-          const senderUser = await User.findById(sender).select("name");
-
-          if (receiverUser?.fcmToken) {
-            try {
-              await admin.messaging().send({
-                token: receiverUser.fcmToken,
-                notification: {
-                  title: senderUser?.name ?? "New Message",
-                  body: text,
-                },
-                data: {
-                  senderId: sender.toString(),
-                },
-                webpush: {
-                  notification: {
-                    icon: "/chat.png",
-                    tag: sender.toString(),
-                  },
-                  fcmOptions: {
-                    link: "/chat",
-                  },
-                },
-              });
-              console.log("[FCM] Push sent (offline):", receiverUser.name);
-            } catch (fcmErr) {
-              console.error("[FCM] Send error:", fcmErr);
-            }
-          }
-        }
-      } catch (error) {
-        console.log("SOCKET ERROR:", error);
-      }
     });
 
     // MESSAGE SEEN
@@ -914,7 +971,7 @@ const socketSetup = (io: Server) => {
           onlineUsers.delete(key);
           await User.findByIdAndUpdate(key, {
             isOnline: false,
-            lastSeen: new Date()
+            lastSeen: new Date(),
           });
         }
       }
