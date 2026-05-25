@@ -14,7 +14,7 @@ app.use(cors({
 
     const allowedOrigins = [
       "http://localhost:3000",
-      "https://chat-app-backend-1-m5c7.onrender.com"
+      "https://chat-app-fronted-lac.vercel.app"
     ];
 
     if (!origin) return callback(null, true);
